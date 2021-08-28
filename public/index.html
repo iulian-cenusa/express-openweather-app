@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iulian Cenusa's OpenWeather App</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+        integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+        crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+        integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+        crossorigin=""></script>
+
+    <link rel="stylesheet" href="css/style.css" type="text/css">
+
+</head>
+
+<body>
+    <header id="header">
+        THEME
+        <label class="switch">
+            <input type="checkbox">
+            <span class="slider round"></span>
+        </label>
+    </header>
+    <main id="main">
+        <div id="top">
+            <div id="top-header">
+                <h1>Current position</h1>
+                <div class="weather-icon" id="current-weather-icon">
+                    <img id="current-icon" src="" alt="current weather icon">
+                    <p></p>
+                </div>
+                <p> <strong>Location:</strong> <span id="loc"></span> </p>
+                <p> <strong>Temperature:</strong> <span id="tmp"></span></p>
+                <p> <strong>Humidity:</strong> <span id="hum"></span></p>
+                <p> <strong>Pressure:</strong> <span id="prs"></span></p>
+                <p> <strong>Windspeed:</strong> <span id="wind"></span></p>
+            </div>
+            <div id="mapid">
+
+            </div>
+        </div>
+        <div id="bottom">
+        </div>
+    </main>
+    <footer id="footer">
+        @Iulian Cenusa 2021
+    </footer>
+
+    <script>
+
+        const weather = {}
+
+        weather.temperature = {
+            unit: "celsius"
+        }
+
+        const tempElement = document.querySelector('#tmp');
+        const humElement = document.querySelector('#hum');
+        const presElement = document.querySelector('#prs');
+        const locationElement = document.querySelector('#loc');
+        const windElement = document.querySelector('#wind');
+        const iconElement = document.querySelector('#current-icon');
+        const bottomDiv = document.querySelector('#bottom');
+        const descriptionElement = document.querySelector('#current-weather-icon p');
+
+        const KELVIN = 273
+        const key = "a0c6cfc008d351d7ef7ae3541f26ebf6"
+
+        if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(setPosition, showError);
+        }
+
+        function setPosition(position) {
+            let latitude = position.coords.latitude;
+            let longitude = position.coords.longitude;
+
+            getWeather(latitude, longitude);
+            setMap(latitude, longitude);
+        }
+
+        function showError(error) {
+            alert(`${error.message}`)
+        }
+
+        function getWeather(latitude, longitude) {
+            let api = `http://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${key}`;
+
+            fetch(api)
+                .then(function (response) {
+                    let data = response.json();
+                    return data;
+                })
+                .then(function (data) {
+                    weather.temperature.value = Math.floor(data.main.temp - KELVIN);
+                    weather.description = data.weather[0].description;
+                    weather.iconId = data.weather[0].icon;
+                    weather.city = data.name;
+                    weather.country = data.sys.country;
+                    weather.pres = Math.floor(data.main.pressure)
+                    weather.hum = Math.floor(data.main.humidity)
+                    weather.wind = data.wind.speed
+
+                })
+                .then(function () {
+                    displayWeather();
+                });
+        }
+
+        function displayWeather() {
+            tempElement.innerHTML = `${weather.temperature.value}<span class="measure-unit">°C</span>`;
+            presElement.innerHTML = `${weather.pres} <span class="measure-unit">hPa</span>`;
+            humElement.innerHTML = `${weather.hum} <span class="measure-unit">%</span>`;
+            locationElement.innerHTML = `${weather.city} ${weather.country}`;
+            windElement.innerHTML = `${weather.wind} <span class="measure-unit">m/s</span>`;
+            iconElement.src = `https://openweathermap.org/img/wn/${weather.iconId}@2x.png`;
+            descriptionElement.innerHTML = `${weather.description}`;
+        }
+
+        function setMap(latitude, longitude) {
+            let lat = latitude.toString();
+            let lon = longitude.toString();
+            const mymap = L.map('mapid').setView([lat, lon], 10);
+            const attribution =
+                '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+            const tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+            const tiles = L.tileLayer(tileUrl, { attribution });
+            tiles.addTo(mymap);
+            var myIcon = L.icon({
+                iconUrl: 'home-icon.png',
+                iconSize: [24, 24]
+            });
+            const marker = L.marker([lat, lon], { icon: myIcon }).addTo(mymap);
+
+            var popup = L.popup();
+
+            function onMapClick(e) {
+                popup
+                    .setLatLng(e.latlng)
+                    .setContent()
+                    .openOn(mymap);
+
+                var marker = L.marker([e.latlng.lat.toString(), e.latlng.lng.toString()]).addTo(mymap);
+                marker.bindPopup(popup).openPopup();
+
+                //add weather info on map position
+                addContainer(e.latlng.lat.toString(), e.latlng.lng.toString());
+            }
+
+            mymap.on('click', onMapClick);
+
+            // after adding the marker to map create child to bottom div and add weather info for that location
+
+            function addContainer(lat, lon) {
+                let new_weather = {};
+
+                let new_api = `http://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${key}`;
+                fetch(new_api)
+                    .then(function (response) {
+                        let data = response.json();
+                        return data;
+                    })
+                    .then(function (data) {
+                        new_weather.temperature = Math.floor(data.main.temp - KELVIN);
+                        new_weather.description = data.weather[0].description;
+                        new_weather.iconId = data.weather[0].icon;
+                        new_weather.city = data.name;
+                        new_weather.country = data.sys.country;
+                        new_weather.pres = Math.floor(data.main.pressure)
+                        new_weather.hum = Math.floor(data.main.humidity)
+                        new_weather.wind = data.wind.speed
+
+                    }).then(() => {
+                        let containerDiv = document.createElement('div');
+                        containerDiv.className = 'container';
+                        bottomDiv.appendChild(containerDiv);
+                        let containerTitle = document.createElement('div');
+                        containerTitle.className = 'container-title';
+                        containerTitle.innerHTML = `${new_weather.city} ${new_weather.country}`;
+                        containerDiv.appendChild(containerTitle);
+
+                        let imgDiv = document.createElement('div');
+                        imgDiv.className = 'weather-icon'
+                        let imgNew = document.createElement('img');
+                        imgNew.src = `https://openweathermap.org/img/wn/${new_weather.iconId}@2x.png`;
+                        imgDiv.appendChild(imgNew);
+                        let descNew = document.createElement('p');
+                        descNew.innerHTML = `${new_weather.description}`;
+                        imgDiv.appendChild(descNew);
+                        containerDiv.appendChild(imgDiv);
+
+                        let dataNew = document.createElement('p');
+                        dataNew.innerHTML = `${new_weather.temperature}<span class="measure-unit">°C</span>   ${new_weather.hum}<span class="measure-unit">%</span>   ${new_weather.pres}<span class="measure-unit">hPa</span>`;
+                        containerDiv.appendChild(dataNew);
+
+                        popup.setContent(`${new_weather.city} ${new_weather.country}`);
+
+                    });
+            }
+
+        }
+
+        // theme toggle part
+        let toggle = document.querySelector('.switch input')
+        toggle.addEventListener('change', ()=>{
+            console.log(toggle.checked);
+            if( toggle.checked === false ){
+
+                document.body.style.color = 'black';
+                document.body.style.backgroundColor = "#4291d3";
+                document.getElementById('header').style.backgroundColor = "#fcca32";
+                document.getElementById('footer').style.backgroundColor = "#fcca32";
+                document.getElementById('main').style.backgroundColor = "#296ba2";
+                document.getElementById('top').style.backgroundColor = "#FFD144";
+                for(let i=0;i<  document.getElementsByClassName('container').length;i++){
+                    document.getElementsByClassName('container')[i].style.backgroundColor = "#FFD144";
+                }
+
+            }else{
+                document.body.style.color = 'white';
+                document.body.style.backgroundColor = "#042947";
+                document.getElementById('header').style.backgroundColor = "#6F5400";
+                document.getElementById('footer').style.backgroundColor = "#6F5400";
+                document.getElementById('main').style.backgroundColor = "#124a78";
+                document.getElementById('top').style.backgroundColor = "#BA9011";
+                for(let i=0;i<  document.getElementsByClassName('container').length;i++){
+                    document.getElementsByClassName('container')[i].style.backgroundColor = "#BA9011";
+                }
+            }
+        })
+
+    </script>
+
+</body>
+
+</html>
